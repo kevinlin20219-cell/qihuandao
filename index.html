@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="奇幻岛">
+<meta name="theme-color" content="#14251c">
+<link rel="apple-touch-icon" href="index.apple-touch-icon.png">
+<title>奇幻岛 · 七章旅程</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&display=swap">
+<style>
+/* Layout: desktop = canvas fills the frame. Touch = canvas sits in the middle at 16:10, with two moss-green control rails
+   (left: pause / hint / notes / companions; right: interact / skill / zoom) sized for fingers. Single dark-forest look. */
+:root{
+  --moss:#14251c;
+  --moss-deep:#0c1812;
+  --rail:#102018;       /* control rails beside the game */
+  --cream:#f6efdc;      /* paper, same as in-game panels */
+  --ink:#24382b;
+  --ink-soft:#5d6f60;
+  --leaf:#2f5a3e;
+  --sun:#e2b45a;
+  --font-display:"ZCOOL XiaoWei","Songti SC","Noto Serif SC","STSong",serif;
+  --font-body:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+  --rail-w:84px;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--moss-deep);color:var(--cream);font-family:var(--font-body)}
+body{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+#canvas{position:fixed;left:0;top:0;width:100vw;height:100vh;display:block;outline:none;background:var(--moss-deep)}
+
+/* Loading screen */
+#gate{position:fixed;inset:0;z-index:20;display:grid;place-items:safe center;
+  padding-block:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  background:radial-gradient(120% 90% at 50% 20%,#2a4a33 0%,var(--moss) 45%,var(--moss-deep) 100%);overflow:auto}
+.card{width:min(520px,100%);background:var(--cream);color:var(--ink);border-radius:18px;
+  padding:clamp(20px,4vw,34px);box-shadow:0 24px 60px rgba(0,0,0,.45);display:grid;gap:18px}
+.eyebrow{font-size:12px;letter-spacing:.18em;color:var(--ink-soft)}
+h1{margin:0;font-family:var(--font-display);font-weight:400;font-size:clamp(30px,6vw,44px);line-height:1.1;text-wrap:balance;color:var(--ink)}
+.lede{margin:0;font-size:15px;line-height:1.7;color:var(--ink-soft)}
+.chapters{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+.chapters li{font-size:12px;padding:4px 9px;border-radius:999px;background:#e9e0c6;color:var(--ink)}
+.bar{height:10px;border-radius:999px;background:#e4dabd;overflow:hidden}
+.bar span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--leaf),var(--sun));transition:width .25s ease}
+.status{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+#start{appearance:none;border:0;border-radius:12px;padding:14px 18px;font:inherit;font-size:17px;font-weight:600;background:var(--leaf);color:var(--cream);cursor:pointer}
+#start:disabled{background:#b9b39f;color:#f3eddc;cursor:progress}
+#start:not(:disabled):hover{background:#376a49}
+#start:focus-visible{outline:3px solid var(--sun);outline-offset:3px}
+.keys{margin:0;font-size:12.5px;line-height:1.8;color:var(--ink-soft)}
+.keys kbd{font-family:inherit;font-size:11.5px;padding:1px 6px;border-radius:5px;background:#e9e0c6;color:var(--ink)}
+.touch-only{display:none}
+.is-touch .touch-only{display:block}
+.is-touch .desk-only{display:none}
+.err{margin:0;font-size:14px;line-height:1.6;color:#9b3b2a}
+@media (max-height:520px){.card{gap:10px;padding:16px 20px}.chapters,.keys{display:none}.lede{font-size:13px;line-height:1.5}h1{font-size:26px}}
+
+/* Touch control rails */
+.rail{position:fixed;top:0;bottom:0;z-index:10;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;
+  background:var(--rail);padding-block:max(8px,env(safe-area-inset-top,0px)) max(8px,env(safe-area-inset-bottom,0px))}
+#railL{left:0;padding-left:env(safe-area-inset-left,0px)}
+#railR{right:0;padding-right:env(safe-area-inset-right,0px)}
+.rail button{appearance:none;width:64px;min-height:44px;flex:0 1 54px;border-radius:14px;border:0;padding:4px 0;
+  background:rgba(246,239,220,.12);color:var(--cream);font:600 14px/1.15 var(--font-body);display:grid;place-items:center;gap:1px}
+.rail button small{font-size:10px;font-weight:500;opacity:.6}
+.rail button.big{width:72px;flex-basis:72px;border-radius:50%;background:var(--cream);color:var(--ink);font-size:16px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.rail button.big small{color:var(--ink-soft);opacity:1}
+.rail button.mid{background:#e9dcb4;color:var(--ink)}
+.rail button.mid small{color:var(--ink-soft);opacity:1}
+.rail button.on,.rail button:active{background:var(--sun)!important;color:var(--ink)}
+.zoom{display:flex;gap:6px}
+.zoom button{width:29px;flex-basis:44px}
+
+/* Companion picker */
+#party{position:fixed;z-index:12;left:calc(var(--rail-w) + env(safe-area-inset-left,0px) + 8px);top:50%;transform:translateY(-50%);
+  background:var(--cream);color:var(--ink);border-radius:16px;padding:10px;display:grid;grid-template-columns:repeat(4,48px);gap:8px;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+#party .lbl{grid-column:1/-1;font-size:12px;color:var(--ink-soft);padding-inline:2px}
+#party button{appearance:none;width:48px;height:48px;border-radius:12px;border:0;background:#e9e0c6;color:var(--ink);font:700 18px/1 var(--font-body)}
+#party button:active{background:var(--sun)}
+
+#turn{position:fixed;z-index:30;inset:0;display:grid;place-items:center;background:rgba(8,16,12,.92);text-align:center;padding:24px}
+#turn p{margin:0;font-size:18px;line-height:1.6;color:var(--cream)}
+#turn .phone{width:46px;height:78px;border:3px solid var(--sun);border-radius:10px;margin:0 auto 18px;animation:spin 2.4s ease-in-out infinite}
+@keyframes spin{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+@media (prefers-reduced-motion:reduce){.bar span{transition:none}#turn .phone{animation:none;transform:rotate(-90deg)}}
+</style>
+
+</head>
+<body>
+<canvas id="canvas" tabindex="0">你的浏览器不支持 HTML5 画布。</canvas>
+
+<div id="gate">
+  <div class="card">
+    <div class="eyebrow">网页版 · v0.8.10</div>
+    <h1>奇幻岛 · 七章旅程</h1>
+    <p class="lede">八位伙伴一起修吊桥、过河、点亮星光湖，用滑轮、杠杆、光和声音解开奇幻岛的秘密。进度自动保存在这台设备的浏览器里。</p>
+    <ul class="chapters" aria-label="七个章节">
+      <li>吊桥重新相连</li><li>三道痕迹与冲刷河岸</li><li>小助手与星光湖</li><li>种子温室的秘密</li><li>听见旋律的森林</li><li>云顶双锁水源站</li><li>点亮奇幻岛</li>
+    </ul>
+    <div class="bar" aria-hidden="true"><span id="progress"></span></div>
+    <div class="status"><span id="status">正在准备森林与伙伴…</span><span id="size"></span></div>
+    <button id="start" disabled>正在下载…</button>
+    <p class="keys desk-only">点击地面行走 · <kbd>1</kbd>–<kbd>8</kbd> 切换伙伴 · <kbd>E</kbd> 互动 · <kbd>Q</kbd> 本领 · <kbd>H</kbd> 提示 · <kbd>N</kbd> 笔记 · <kbd>Esc</kbd> 暂停 · 滚轮缩放</p>
+    <p class="keys touch-only">横屏玩。点地面行走，右边「互动」「本领」，左边「暂停」「提示」「笔记」「伙伴」。</p>
+    <p class="err" id="error" hidden></p>
+  </div>
+</div>
+
+<div class="rail" id="railL" hidden>
+  <button type="button" data-key="Escape" aria-label="暂停">暂停</button>
+  <button type="button" data-key="h" aria-label="提示">提示</button>
+  <button type="button" data-key="n" aria-label="旅途笔记">笔记</button>
+  <button type="button" class="mid" id="partyBtn" aria-label="切换伙伴" aria-expanded="false">伙伴<small>换人</small></button>
+</div>
+<div class="rail" id="railR" hidden>
+  <button type="button" class="big" data-key="e" aria-label="互动">互动</button>
+  <button type="button" class="mid" data-key="q" aria-label="本领">本领</button>
+  <div class="zoom">
+    <button type="button" data-key="=" aria-label="放大">＋</button>
+    <button type="button" data-key="-" aria-label="缩小">－</button>
+  </div>
+</div>
+<div id="party" hidden role="dialog" aria-label="切换伙伴">
+  <div class="lbl">按画面下方的编号选伙伴</div>
+  <button type="button" data-key="1">1</button><button type="button" data-key="2">2</button>
+  <button type="button" data-key="3">3</button><button type="button" data-key="4">4</button>
+  <button type="button" data-key="5">5</button><button type="button" data-key="6">6</button>
+  <button type="button" data-key="7">7</button><button type="button" data-key="8">8</button>
+</div>
+<div id="safeProbe" aria-hidden="true" style="position:fixed;visibility:hidden;pointer-events:none;padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)"></div>
+<div id="turn" hidden><div><div class="phone" aria-hidden="true"></div><p>请把手机横过来</p></div></div>
+
+<script src="index.js"></script>
+<script>
+'use strict';
+const GAME_CONFIG = {"args": [], "canvasResizePolicy": 2, "emscriptenPoolSize": 8, "ensureCrossOriginIsolationHeaders": false, "executable": "index", "experimentalVK": false, "fileSizes": {"index.pck": 49983196, "index.wasm": 39514754}, "focusCanvas": true, "gdextensionLibs": [], "godotPoolSize": 4};
+const GAME_FILES = {"index.wasm": {"chunks": ["wasm-2862a06f11-0.wasm", "wasm-2862a06f11-1.wasm"], "raw": 39514754, "compressed": 10054758, "type": "application/wasm"}, "index.pck": {"chunks": ["pck-c9c8291980-0.wasm", "pck-c9c8291980-1.wasm", "pck-c9c8291980-2.wasm", "pck-c9c8291980-3.wasm", "pck-c9c8291980-4.wasm", "pck-c9c8291980-5.wasm"], "raw": 49983196, "compressed": 49006715, "type": "application/octet-stream"}};
+const $ = id => document.getElementById(id);
+const touch = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 1 && !matchMedia('(pointer: fine)').matches;
+if (touch) document.documentElement.classList.add('is-touch');
+
+// Serve index.wasm / index.pck from gzip-compressed chunks published beside this page.
+const realFetch = window.fetch.bind(window);
+window.fetch = async function (input, init) {
+  const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+  const item = GAME_FILES[url.pathname.split('/').pop()];
+  if (!item) return realFetch(input, init);
+  let next = 0;
+  const source = new ReadableStream({
+    async pull(ctrl) {
+      try {
+        if (next >= item.chunks.length) { ctrl.close(); return; }
+        const r = await realFetch(new URL(item.chunks[next++], document.baseURI));
+        if (!r.ok) throw new Error('资源下载失败（' + r.status + '）');
+        ctrl.enqueue(new Uint8Array(await r.arrayBuffer()));
+      } catch (e) { ctrl.error(e); }
+    }
+  });
+  return new Response(source.pipeThrough(new DecompressionStream('gzip')),
+    { headers: { 'Content-Type': item.type, 'Content-Length': String(item.raw) } });
+};
+
+// Browsers start audio suspended; wake every context on the next tap or key.
+const audioContexts = [];
+for (const key of ['AudioContext', 'webkitAudioContext']) {
+  const Original = window[key];
+  if (Original) window[key] = class extends Original { constructor(...a) { super(...a); audioContexts.push(this); } };
+}
+const wake = () => { for (const c of audioContexts) if (c.state === 'suspended') c.resume().catch(() => {}); };
+addEventListener('pointerdown', wake, { capture: true });
+addEventListener('keydown', wake, { capture: true });
+
+// Canvas layout. Godot follows the canvas pixel size (resize policy 0).
+let started = false;
+function layout() {
+  const c = $('canvas'), W = innerWidth, H = innerHeight, dpr = Math.min(devicePixelRatio || 1, 2);
+  let x = 0, y = 0, w = W, h = H;
+  const rails = touch && started && W > H;
+  if (rails) {
+    const ps = getComputedStyle($('safeProbe'));
+    const sl = parseFloat(ps.paddingLeft) || 0, sr = parseFloat(ps.paddingRight) || 0;
+    // Rails take what the 16:10 picture leaves over, but never less than 84px each.
+    const fitW = Math.min(W - 2 * (84 + Math.max(sl, sr)), H * 1.6);
+    w = Math.max(200, Math.floor(fitW)); h = Math.floor(Math.min(H, w / 1.6));
+    x = Math.floor((W - w) / 2); y = Math.floor((H - h) / 2);
+    const railW = x;
+    document.documentElement.style.setProperty('--rail-w', railW + 'px');
+    $('railL').style.width = $('railR').style.width = railW + 'px';
+  }
+  $('railL').hidden = $('railR').hidden = !rails;
+  if (!rails) $('party').hidden = true;
+  Object.assign(c.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+  const pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+  if (c.width !== pw || c.height !== ph) { c.width = pw; c.height = ph; }
+  $('turn').hidden = !(touch && started && H > W);
+}
+addEventListener('resize', layout);
+if (screen.orientation) screen.orientation.addEventListener?.('change', () => setTimeout(layout, 120));
+layout();
+
+function fail(msg) { const e = $('error'); e.textContent = msg; e.hidden = false; $('start').textContent = '无法启动'; $('start').disabled = true; }
+const totalMB = (Object.values(GAME_FILES).reduce((s, f) => s + f.compressed, 0) / 1048576).toFixed(0);
+$('size').textContent = '约 ' + totalMB + ' MB';
+
+const engine = new Engine(Object.assign({}, GAME_CONFIG, {
+  args: ['--main-pack', 'index.pck'],
+  canvas: $('canvas'),
+  canvasResizePolicy: 0,
+  onProgress(current, total) {
+    if (total > 0) {
+      const pct = Math.min(100, Math.round(current / total * 100));
+      $('progress').style.width = pct + '%';
+      $('status').textContent = '正在下载 · ' + pct + '%';
+    }
+  },
+  onPrintError(...a) { console.error(...a); }
+}));
+
+const missing = Engine.getMissingFeatures({ threads: false });
+if (missing.length || !window.DecompressionStream) {
+  fail('这个浏览器缺少运行游戏所需的功能（' + (missing.join('、') || '资源解压') + '）。请用最新版 Chrome、Edge 或 Safari 打开。');
+} else {
+  Promise.all([engine.init('index'), engine.preloadFile('index.pck', 'index.pck')]).then(() => {
+    $('progress').style.width = '100%';
+    $('status').textContent = '准备好了';
+    const b = $('start'); b.disabled = false; b.textContent = '开始探险 · 打开声音'; b.focus();
+  }).catch(e => fail('下载没有完成：' + (e && e.message || e) + '。刷新页面可以重试。'));
+}
+
+$('start').addEventListener('click', () => {
+  $('start').disabled = true; $('start').textContent = '正在进入奇幻岛…';
+  if (touch) {
+    // Android: full screen + landscape. iPhone ignores both; the page still works.
+    const el = document.documentElement;
+    try { const p = el.requestFullscreen?.({ navigationUI: 'hide' }); p?.then(() => screen.orientation?.lock?.('landscape').catch(() => {})).catch(() => {}); } catch (e) {}
+  }
+  started = true; layout();
+  engine.start().then(() => {
+    $('gate').hidden = true; $('canvas').focus(); wake(); layout();
+  }).catch(e => fail('启动失败：' + (e && e.message || e)));
+});
+
+// Rail buttons send the same key presses the keyboard would.
+const CODES = { Escape: ['Escape', 27], '=': ['Equal', 187], '-': ['Minus', 189] };
+function press(key) {
+  const c = $('canvas');
+  let code, kc;
+  if (CODES[key]) [code, kc] = CODES[key];
+  else if (/^\d$/.test(key)) { code = 'Digit' + key; kc = 48 + +key; }
+  else { code = 'Key' + key.toUpperCase(); kc = key.toUpperCase().charCodeAt(0); }
+  const o = { key, code, keyCode: kc, which: kc, bubbles: true, cancelable: true };
+  c.dispatchEvent(new KeyboardEvent('keydown', o));
+  setTimeout(() => c.dispatchEvent(new KeyboardEvent('keyup', o)), 90);
+}
+function bindKeys(root, after) {
+  for (const b of root.querySelectorAll('button[data-key]')) {
+    b.addEventListener('pointerdown', e => {
+      e.preventDefault(); e.stopPropagation(); wake(); press(b.dataset.key);
+      b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 160);
+      if (after) after();
+    });
+  }
+}
+const closeParty = () => { $('party').hidden = true; $('partyBtn').setAttribute('aria-expanded', 'false'); };
+bindKeys($('railL'), closeParty); bindKeys($('railR'), closeParty); bindKeys($('party'), closeParty);
+$('partyBtn').addEventListener('pointerdown', e => {
+  e.preventDefault(); e.stopPropagation();
+  const open = $('party').hidden; $('party').hidden = !open; $('partyBtn').setAttribute('aria-expanded', String(open));
+});
+$('canvas').addEventListener('pointerdown', closeParty);
+</script>
+
+</body>
+</html>

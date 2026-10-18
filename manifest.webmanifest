@@ -1,0 +1,1 @@
+{"name": "奇幻岛 · 七章旅程", "short_name": "奇幻岛", "start_url": "./index.html", "display": "fullscreen", "orientation": "landscape", "background_color": "#0c1812", "theme_color": "#14251c", "icons": [{"src": "index.icon.png", "sizes": "any", "type": "image/png"}, {"src": "index.apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}]}
